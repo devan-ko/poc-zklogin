@@ -63,7 +63,8 @@ export default function Home() {
 
         prepareLogin().then((userKeyData) => {
 
-            const REDIRECT_URI = 'https://zklogin-dev-redirect.vercel.app/api/auth';
+            //const REDIRECT_URI = 'https://test-zkapp.vercel.app/auth';
+            const REDIRECT_URI = 'https://9724-101-100-166-36.ngrok-free.app/auth';
             const customRedirectUri = getRedirectUri();
             const params = new URLSearchParams({
                 // When using the provided test client ID + redirect site, the redirect_uri needs to be provided in the state.
@@ -71,7 +72,8 @@ export default function Home() {
                     redirect_uri: customRedirectUri
                 }).toString(),
                 // Test Client ID for devnet / testnet:
-                client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
+                client_id: '20053734445-5g7fa35ct3mv3f2hb97hc08qjk0lepbq.apps.googleusercontent.com',
+                // client_secret : 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
                 redirect_uri: REDIRECT_URI,
                 response_type: 'id_token',
                 scope: 'openid',

@@ -11,6 +11,7 @@ import {fromB64} from "@mysten/bcs";
 import {useSui} from "@/app/hooks/useSui";
 import {SerializedSignature} from "@mysten/sui.js/src/cryptography";
 import {Ed25519Keypair} from "@mysten/sui.js/keypairs/ed25519";
+import { Secp256k1Keypair } from "@mysten/sui.js/keypairs/secp256k1";
 import {TransactionBlock} from '@mysten/sui.js/transactions';
 import {Blocks} from 'react-loader-spinner'
 
@@ -19,6 +20,7 @@ export default function Page() {
     const [error, setError] = useState<string | null>(null);
     const [publicKey, setPublicKey] = useState<string | null>(null);
     const [txDigest, setTxDigest] = useState<string | null>(null);
+    const [voteTxDigest, setVoteTxDigest] = useState<string | null>(null);
     const [jwtEncoded, setJwtEncoded] = useState<string | null>(null);
     const [userAddress, setUserAddress] = useState<string | null>(null);
     const [userSalt, setUserSalt] = useState<string | null>(null);
@@ -35,6 +37,8 @@ export default function Page() {
         }
         console.log("Subject = ", subject);
         const response = await axios.post('/api/userinfo/get/salt', dataRequest);
+
+        
         console.log("getSalt response = ", response);
         if (response?.data.status == 200) {
             const userData: PersistentData = response.data.data as PersistentData;
@@ -126,7 +130,60 @@ export default function Page() {
         });
     }
 
-    async function getZkProofAndExecuteTx() {
+    async function executeVoteWithZKP(partialZkSignature :ZkSignatureInputs, ephemeralKeyPair: Ed25519Keypair, userKeyData: UserKeyData, decodedJwt: LoginResponse) {
+
+        console.log("partialZkSignature = ", partialZkSignature);
+        const txb = new TransactionBlock();
+
+        //Just a simple Demo call to create a little NFT weapon :p
+        txb.moveCall({
+            target: `0xf8294cd69d69d867c5a187a60e7095711ba237fad6718ea371bf4fbafbc5bb4b::teotest::create_weapon`,  //demo package published on testnet
+            arguments: [
+                txb.pure("Zero Knowledge Proof Axe 9000"),  // weapon name
+                txb.pure(66),  // weapon damage
+            ],
+        });
+        txb.setSender(userAddress!);
+
+        const signatureWithBytes = await txb.sign({client: suiClient, signer: ephemeralKeyPair});
+
+        console.log("Got SignatureWithBytes = ", signatureWithBytes);
+        console.log("maxEpoch = ", userKeyData.maxEpoch);
+        console.log("userSignature = ", signatureWithBytes.signature);
+
+        const addressSeed = genAddressSeed(BigInt(userSalt!), "sub", decodedJwt.sub, decodedJwt.aud);
+
+        const zkSignature: SerializedSignature = getZkSignature({
+            inputs: {
+                ...partialZkSignature,
+                addressSeed: addressSeed.toString(),
+            },
+            maxEpoch: userKeyData.maxEpoch,
+            userSignature: signatureWithBytes.signature,
+        });
+
+        suiClient.executeTransactionBlock({
+            transactionBlock: signatureWithBytes.bytes,
+            signature: zkSignature,
+            options: {
+                showEffects: true
+            }
+        }).then((response) => {
+            if (response.effects?.status.status) {
+                console.log("Transaction executed! Digest = ", response.digest);
+                setTxDigest(response.digest);
+                setTransactionInProgress(false);
+            } else {
+                console.log("Transaction failed! reason = ", response.effects?.status)
+                setTransactionInProgress(false);
+            }
+        }).catch((error) => {
+            console.log("Error During Tx Execution. Details: ", error);
+            setTransactionInProgress(false);
+        });
+    }    
+
+    async function getZkProofAndExecuteTx(original:boolean) {
         setTransactionInProgress(true);
         const decodedJwt: LoginResponse = jwt_decode(jwtEncoded!) as LoginResponse;
         const {userKeyData, ephemeralKeyPair} = getEphemeralKeyPair();
@@ -162,8 +219,12 @@ export default function Page() {
         console.log("zkp response = ", proofResponse.data.zkp);
 
         const partialZkSignature: ZkSignatureInputs = proofResponse.data.zkp as ZkSignatureInputs;
-
-        await executeTransactionWithZKP(partialZkSignature, ephemeralKeyPair, userKeyData, decodedJwt);
+        if (original == true) {
+            await executeTransactionWithZKP(partialZkSignature, ephemeralKeyPair, userKeyData, decodedJwt);
+        } else {
+            await executeVoteWithZKP(partialZkSignature, ephemeralKeyPair, userKeyData, decodedJwt);
+        }
+        
     }
 
 
@@ -193,8 +254,10 @@ export default function Page() {
     async function giveSomeTestCoins(address: string) {
         console.log("Giving some test coins to address " + address);
         setTransactionInProgress(true);
-        let adminPrivateKeyArray = Uint8Array.from(Array.from(fromB64(process.env.NEXT_PUBLIC_ADMIN_SECRET_KEY!)));
-        const adminKeypair = Ed25519Keypair.fromSecretKey(adminPrivateKeyArray.slice(1));
+        //let adminPrivateKeyArray = Uint8Array.from(Array.from(fromB64(process.env.NEXT_PUBLIC_ADMIN_SECRET_KEY!)));
+        let adminPhrase = process.env.NEXT_PUBLIC_ADMIN_PHRASE as string
+        //const adminKeypair = Secp256k1Keypair.fromSecretKey(adminPrivateKeyArray.slice(1));
+        const adminKeypair = Secp256k1Keypair.deriveKeypair(adminPhrase);
         const tx = new TransactionBlock();
         const giftCoin = tx.splitCoins(tx.gas, [tx.pure(30000000)]);
 
@@ -241,6 +304,11 @@ export default function Page() {
         checkIfAddressHasBalance(address);
 
         console.log("All required data loaded. ZK Address =", address);
+    }
+
+
+    async function startVoting() {
+
     }
 
     useLayoutEffect(() => {
@@ -308,11 +376,22 @@ export default function Page() {
                                 <button
                                     className="bg-gray-400 text-white px-4 py-2 rounded-md"
                                     disabled={!userAddress}
-                                    onClick={() => getZkProofAndExecuteTx()}
+                                    onClick={() => getZkProofAndExecuteTx(true)}
                                 >
                                     Get ZKP Proof and Execute Transaction
                                 </button>
-                            </div>
+                            </div>                   
+                        ) : null}
+                        {userBalance > 0 ? (
+                            <div id="contents" className="font-medium pb-6">
+                                <button
+                                    className="bg-gray-400 text-white px-4 py-2 rounded-md"
+                                    disabled={!userAddress}
+                                    onClick={() => getZkProofAndExecuteTx(false)}
+                                >
+                                  Vote with ZKP!
+                                </button>
+                            </div>                   
                         ) : null}
                     </div>
                 ) :
@@ -332,6 +411,27 @@ export default function Page() {
                                 onClick={() => window.open(`https://suiexplorer.com/txblock/${txDigest}?network=testnet`, "_blank")}
                             >
                                 See it on Sui Explorer
+                            </button>
+                        </div>
+                    </div>
+                ) :
+                null
+            }
+
+
+            {voteTxDigest ? (
+                    <div className="flex flex-col items-center mt-10">
+                        <h3>Vote Transaction Completed!</h3>
+                        <div id="contents" className="font-medium pb-6 pt-6">
+                            <p>voteTxDigest = {voteTxDigest}</p>
+                        </div>
+                        <div id="contents" className="font-medium pb-6">
+                            <button
+                                className="bg-gray-400 text-white px-4 py-2 rounded-md"
+                                disabled={!userAddress}
+                                onClick={() => window.open(`https://suiexplorer.com/txblock/${voteTxDigest}?network=testnet`, "_blank")}
+                            >
+                                See vote transaction on Sui Explorer
                             </button>
                         </div>
                     </div>

@@ -29,7 +29,8 @@
     "react-dom": "18.2.0",
     "react-loader-spinner": "^5.4.5",
     "typescript": "5.1.6",
-    "utf-8-validate": "^5.0.10"
+    "utf-8-validate": "^5.0.10",
+    "vercel": "^32.3.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.14",

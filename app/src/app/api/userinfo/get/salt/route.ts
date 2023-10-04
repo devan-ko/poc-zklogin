@@ -1,20 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
 import {PersistentData} from "@/app/types/UserInfo";
-export async function POST(request: NextRequest) {
 
+const randomStr = "0xcafecafe";
+export async function POST(request: NextRequest) {
+    
     const body = await request.json();
     try {
         let dataRequest: PersistentData = body as PersistentData;
+        console.log("checking zklogin req data param datarequest : " + dataRequest);
+        console.log("checking zklogin req data param subject : " + dataRequest.subject);
+        console.log("checking zklogin req data param jwt : " + dataRequest.jwt);
         if (dataRequest && dataRequest.subject && dataRequest.jwt) {
             console.log("Received request for FETCHING Salt for subject ", dataRequest.subject);
             let response = await kv.get(dataRequest.subject);
             if(!response) {
                 console.log("Salt not found in KV store. Fetching from Mysten API. jwt = ", dataRequest.jwt, "subject = ", dataRequest.subject);
                 const saltFromMysten = await getSaltFromMystenAPI(dataRequest.jwt!);
-                response = {subject: dataRequest.subject, salt: saltFromMysten} ;
-                console.log("response from mysten = ", response);
+                if (!saltFromMysten) {
+                    console.log("salt couldn't get salt server put kv ");
+                    response = {subject: dataRequest.subject, salt: randomStr} ;
+                    return NextResponse.json({status: 200, statusText: "OK", data: response});
+                }else {
+                    console.log( "salt from mysten : ", saltFromMysten)
+                    response = {subject: dataRequest.subject, salt: saltFromMysten} ;
+                    console.log("response from mysten = ", response);
+                }
+
             }
+            
             return NextResponse.json({status: 200, statusText: "OK", data: response});
         }
     }catch (e) {
@@ -38,5 +52,6 @@ async function getSaltFromMystenAPI(jwtEncoded : string ){
         body: JSON.stringify(payload),
     });
     const responseJson = await response.json();
+    console.log(JSON.stringify(responseJson));
     return responseJson.salt;
 }

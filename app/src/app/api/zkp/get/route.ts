@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
 
     const zkpPayload = await request.json();
     console.log("received payload with Request for ZKP = ", zkpPayload);
-    return axios.post('https://prover.mystenlabs.com/v1', zkpPayload,
+    return axios.post('https://prover-dev.mystenlabs.com/v1', zkpPayload,
     ).then((response) => {
         const data = response.data;
         console.log("response.data: ", data);
