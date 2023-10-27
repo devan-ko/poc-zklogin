@@ -42,8 +42,8 @@ export default function Page() {
 
   const { suiClient } = useSui();
 
-  const GROUP ="0x3abca9a28f04edc86c704c4ecc4cdfc5456f0c6a0cedc5986e6f6e163661bc60";
-  const PKG_ID="0x16aad3f0e018b354474c3a0ce638b6ebe9706af0c241d32de5308469ec291737";
+  const GROUP ="0xecd7a8a4e42ee7f939d6067722e1f9a88c39ec12ce7796e4f7fe74685ee6d50d";
+  const PKG_ID="0x715b8f1de858b9779f515cd166a438991627f3adbc229565bc57733995a900c8";
 
   async function getSalt(subject: string, encodedJwt: string) {
     const dataRequest: PersistentData = {
@@ -423,7 +423,7 @@ export default function Page() {
     //const adminKeypair = Secp256k1Keypair.fromSecretKey(adminPrivateKeyArray.slice(1));
     const adminKeypair = Secp256k1Keypair.deriveKeypair(adminPhrase);
     const tx = new TransactionBlock();
-    const giftCoin = tx.splitCoins(tx.gas, [tx.pure(30000000)]);
+    const giftCoin = tx.splitCoins(tx.gas, [tx.pure(300000000)]);
 
     tx.transferObjects([giftCoin], tx.pure(address));
 
